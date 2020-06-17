@@ -6,8 +6,8 @@
 
 <input type="hidden" id="token" value="@Model.Token"/>
 
+<div id="host" style="height: 90vh; width: 90vw; overflow: auto"></div>
 
-<div id="host" style="overflow: auto"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/5.0.0-preview.2.20167.3/signalr.min.js" integrity="sha256-giCvl9WqY4cRekJLCx3jo3TjyghtCDdsCWJSjBl3WJw=" crossorigin="anonymous"></script>
 <script>
     const connection = new signalR.HubConnectionBuilder().withUrl("/hub").build();

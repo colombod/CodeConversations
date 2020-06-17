@@ -63,14 +63,20 @@ namespace CodeConversations.Bots
         }
 
 #pragma warning disable CS1998
+
+
         protected override async Task OnMessageActivityAsync(ITurnContext<IMessageActivity> turnContext,
             CancellationToken cancellationToken)
+        {
+            await HandleTurn(turnContext, cancellationToken);
+        }
+
+        private async Task HandleTurn(ITurnContext<IMessageActivity> turnContext, CancellationToken cancellationToken)
         {
             var value = turnContext.Activity;
             var attachments = turnContext.Activity.Attachments;
             if (turnContext.Activity.Value == null) // someone typed in something, it isn't a card
             {
-
                 var content = turnContext.Activity.Text;
                 var code = CheckForCode(content);
 
@@ -91,22 +97,25 @@ namespace CodeConversations.Bots
                         if (UserGame.CurrentChatUser?.Id != user.Id)
                         {
                             UserGame.CurrentChatUser = user;
-                            messageText = $"Hey {mention.Text} It looks like you're typing some code. Let me run it for you! 😊";
+                            messageText =
+                                $"Hey {mention.Text} It looks like you're typing some code. Let me run it for you! 😊";
                         }
                         else
                         {
-                            messageText = UserGame.GetMessageForUser( mention);
+                            messageText = UserGame.GetMessageForUser(mention);
                         }
 
-                        await turnContext.Adapter.ContinueConversationAsync(_botId, conversationReference, async (context, token) =>
-                        {
-                            var message = MessageFactory.Text(messageText);
-                            if (messageText.Contains(mention.Text))
+                        await turnContext.Adapter.ContinueConversationAsync(_botId, conversationReference,
+                            async (context, token) =>
                             {
-                                message.Entities.Add(mention);
-                            }
-                            await context.SendActivityAsync(message, token);
-                        }, cancellationToken);
+                                var message = MessageFactory.Text(messageText);
+                                if (messageText.Contains(mention.Text))
+                                {
+                                    message.Entities.Add(mention);
+                                }
+
+                                await context.SendActivityAsync(message, token);
+                            }, cancellationToken);
 
                         // build the envelope
                         var submitCode = new SubmitCode(code);
@@ -119,76 +128,81 @@ namespace CodeConversations.Bots
                             .Timeout(DateTimeOffset.UtcNow.Add(TimeSpan.FromMinutes(1)))
                             .Buffer(TimeSpan.FromSeconds(1))
                             .Subscribe(
-                         onNext: async formattedValues =>
-                         {
-                             turnContext.Adapter.ContinueConversationAsync(_botId, conversationReference,
-                                 (context, token) =>
-                                 {
-                                     if (formattedValues.Count > 0)
-                                     {
-                                         var hasHtml = formattedValues.Any(f => f.MimeType == HtmlFormatter.MimeType);
+                                onNext: async formattedValues =>
+                                {
+                                    turnContext.Adapter.ContinueConversationAsync(_botId, conversationReference,
+                                        (context, token) =>
+                                        {
+                                            if (formattedValues.Count > 0)
+                                            {
+                                                var hasHtml = formattedValues.Any(f => f.MimeType == HtmlFormatter.MimeType);
 
-                                         if (hasHtml)
-                                         {
-                                             if (!cardSent)
-                                             {
-                                                 cardSent = true;
-                                                 var card = new HeroCard
-                                                 {
-                                                     Title = "Your output is too awesome 😎",
-                                                     Subtitle = "Use the viewer to see it.",
-                                                     Buttons = new List<CardAction>
-                                                     {
-                                                        new TaskModuleAction("Open Viewer",
-                                                            new {data = submissionToken})
-                                                     },
-                                                 }.ToAttachment();
-                                                 var message = MessageFactory.Attachment(card);
-                                                 context.SendActivityAsync(message, token).Wait();
-                                             }
-                                         }
-                                         else
-                                         {
-                                             var content = string.Join("\n", formattedValues.Select(f => f.Value));
-                                             var message = MessageFactory.Text($"```\n{content}");
-                                             context.SendActivityAsync(message, token).Wait();
-                                         }
-                                     }
+                                                if (hasHtml)
+                                                {
+                                                    if (!cardSent)
+                                                    {
+                                                        cardSent = true;
+                                                        var card = new HeroCard
+                                                        {
+                                                            Title = "Your output is too awesome 😎",
+                                                            Subtitle = "Use the viewer to see it.",
+                                                            Buttons = new List<CardAction>
+                                                            {
+                                                                new TaskModuleAction("Open Viewer",
+                                                                    new {data = submissionToken})
+                                                            },
+                                                        }.ToAttachment();
+                                                        var message = MessageFactory.Attachment(card);
+                                                        context.SendActivityAsync(message, token).Wait();
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    var content = string.Join("\n", formattedValues.Select(f => f.Value));
+                                                    var message = MessageFactory.Text($"```\n{content}");
+                                                    context.SendActivityAsync(message, token).Wait();
+                                                }
+                                            }
 
-                                     return Task.CompletedTask;
-                                 }, cancellationToken).Wait();
-                         }, onCompleted: async () =>
-                         {
-                             await turnContext.Adapter.ContinueConversationAsync(_botId, conversationReference, async (context, token) =>
-                             {
-                                 await Task.Delay(1000);
-                                 var message = MessageFactory.Text($"{mention.Text} all done here 👍");
-                                 message.Entities.Add(mention);
-                                 await context.SendActivityAsync(message, token);
-                             }, cancellationToken);
-                         },
-                           onError: async error =>
-                           {
-                               await turnContext.Adapter.ContinueConversationAsync(_botId, conversationReference, async (context, token) =>
-                               {
-                                   await Task.Delay(1000);
-                                   var message = MessageFactory.Text($@"{mention.Text} there were some issues 👎 :\n {error.Message}");
-                                   message.Entities.Add(mention);
-                                   await context.SendActivityAsync(message, token);
-                               }, cancellationToken);
-                           });
+                                            return Task.CompletedTask;
+                                        }, cancellationToken).Wait();
+                                }, onCompleted: async () =>
+                                {
+                                    await turnContext.Adapter.ContinueConversationAsync(_botId, conversationReference,
+                                        async (context, token) =>
+                                        {
+                                            await Task.Delay(1000);
+                                            var message = MessageFactory.Text($"{mention.Text} all done here 👍");
+                                            message.Entities.Add(mention);
+                                            await context.SendActivityAsync(message, token);
+                                        }, cancellationToken);
+                                },
+                                onError: async error =>
+                                {
+                                    await turnContext.Adapter.ContinueConversationAsync(_botId, conversationReference,
+                                        async (context, token) =>
+                                        {
+                                            await Task.Delay(1000);
+                                            var message =
+                                                MessageFactory.Text(
+                                                    $@"{mention.Text} there were some issues 👎 :\n {error.Message}");
+                                            message.Entities.Add(mention);
+                                            await context.SendActivityAsync(message, token);
+                                        }, cancellationToken);
+                                });
 
                         user.IncrementCodeSubmissionCount();
                         await DotNetInteractiveProcessRunner.Instance.ExecuteEnvelope(submissionToken);
                     }
                     else
                     {
-                        await turnContext.Adapter.ContinueConversationAsync(_botId, conversationReference, async (context, token) =>
-                        {
-                            var message = MessageFactory.Text($"Sorry {mention.Text} cannot execute your code now. 😓");
-                            message.Entities.Add(mention);
-                            await context.SendActivityAsync(message, token);
-                        }, cancellationToken);
+                        await turnContext.Adapter.ContinueConversationAsync(_botId, conversationReference,
+                            async (context, token) =>
+                            {
+                                var message = MessageFactory.Text($"Sorry {mention.Text} cannot execute your code now. 😓");
+                                message.Entities.Add(mention);
+                                await context.SendActivityAsync(message, token);
+                            }, cancellationToken);
                     }
                 }
                 else if (string.IsNullOrWhiteSpace(DotNetInteractiveProcessRunner.Instance.SessionLanguage))
@@ -197,7 +211,7 @@ namespace CodeConversations.Bots
                     var attach = MessageFactory.Attachment(card);
                     await turnContext.SendActivityAsync(attach, cancellationToken);
                 }
-                else if (content.Contains("👊"))
+                else if (content.Contains("👊") || content.Contains("🤛") || content.Contains("🤜"))
                 {
                     var mentioned = turnContext.Activity.GetMentions()?.FirstOrDefault(m => m.Mentioned.Id.EndsWith(_botId));
                     if (mentioned != null)
@@ -216,14 +230,16 @@ namespace CodeConversations.Bots
             {
                 var userAction = turnContext.Activity.Value;
 
-                if (((JObject)userAction).Value<string>("userAction").Equals("SelectLanguage"))
+                if (((JObject) userAction).Value<string>("userAction").Equals("SelectLanguage"))
                 {
                     if (string.IsNullOrWhiteSpace(DotNetInteractiveProcessRunner.Instance.SessionLanguage))
                     {
-                        var language = ((JObject)userAction).Value<string>("language");
+                        var language = ((JObject) userAction).Value<string>("language");
                         DotNetInteractiveProcessRunner.Instance.SessionLanguage = language;
-                        var languageLabel = ((JObject)userAction).Value<string>("languageLabel");
-                        var message = MessageFactory.Text($"All set. Let's write some {DotNetInteractiveProcessRunner.Instance.SessionLanguage} code together! 🤘🏻");
+                        var languageLabel = ((JObject) userAction).Value<string>("languageLabel");
+                        var message =
+                            MessageFactory.Text(
+                                $"All set. Let's write some {DotNetInteractiveProcessRunner.Instance.SessionLanguage} code together! 🤘🏻");
                         await turnContext.SendActivityAsync(message, cancellationToken);
                     }
                 }
